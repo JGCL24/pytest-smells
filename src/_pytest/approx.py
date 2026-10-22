@@ -183,7 +183,7 @@ class ApproxNumpy(Approx[ndarray]):
         )
         return f"approx({list_scalars!r})"
 
-    def _repr_compare(self, other_side: ndarray | list[Any]) -> list[str]:
+    def test__repr_compare(self, other_side: ndarray | list[Any]) -> list[str]:
         import itertools
 
         def get_value_from_nested_list(

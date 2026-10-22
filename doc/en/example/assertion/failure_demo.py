@@ -4,7 +4,7 @@ import pytest
 from pytest import raises
 
 
-def otherfunc(a, b):
+def test_otherfunc(a, b):
     assert a == b
 
 
@@ -12,7 +12,7 @@ def somefunc(x, y):
     otherfunc(x, y)
 
 
-def otherfunc_multi(a, b):
+def test_otherfunc_multi(a, b):
     assert a == b
 
 
@@ -185,7 +185,7 @@ class TestRaises:
         if namenotexi:  # noqa: F821
             pass
 
-    def func1(self):
+    def test_func1(self):
         assert 41 == 42
 
 
