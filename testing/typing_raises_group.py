@@ -32,13 +32,13 @@ def check_raisesexc_typevar_default(e: RaisesExc) -> None:
     e.exception_type().blah()  # type: ignore
 
 
-def check_basic_contextmanager() -> None:
+def test_basic_contextmanager() -> None:
     with RaisesGroup(ValueError) as e:
         raise ExceptionGroup("foo", (ValueError(),))
     assert_type(e.value, ExceptionGroup[ValueError])
 
 
-def check_basic_matches() -> None:
+def test_basic_matches() -> None:
     # check that matches gets rid of the naked ValueError in the union
     exc: ExceptionGroup[ValueError] | ValueError = ExceptionGroup("", (ValueError(),))
     if RaisesGroup(ValueError).matches(exc):
@@ -49,7 +49,7 @@ def check_basic_matches() -> None:
         assert_type(exc, BaseExceptionGroup[KeyboardInterrupt])
 
 
-def check_matches_with_different_exception_type() -> None:
+def test_matches_with_different_exception_type() -> None:
     e: BaseExceptionGroup[KeyboardInterrupt] = BaseExceptionGroup(
         "",
         (KeyboardInterrupt(),),
@@ -138,14 +138,14 @@ def raisesgroup_narrow_baseexceptiongroup() -> None:
     RaisesGroup(Exception, check=handle_group)
 
 
-def check_raisesexc_transparent() -> None:
+def test_raisesexc_transparent() -> None:
     with RaisesGroup(RaisesExc(ValueError)) as e:
         ...
     _: BaseExceptionGroup[ValueError] = e.value
     assert_type(e.value, ExceptionGroup[ValueError])
 
 
-def check_nested_raisesgroups_contextmanager() -> None:
+def test_nested_raisesgroups_contextmanager() -> None:
     with RaisesGroup(RaisesGroup(ValueError)) as excinfo:
         raise ExceptionGroup("foo", (ValueError(),))
 
@@ -163,7 +163,7 @@ def check_nested_raisesgroups_contextmanager() -> None:
     )
 
 
-def check_nested_raisesgroups_matches() -> None:
+def test_nested_raisesgroups_matches() -> None:
     """Check nested RaisesGroup with .matches"""
     exc: ExceptionGroup[ExceptionGroup[ValueError]] = ExceptionGroup(
         "",
@@ -174,7 +174,7 @@ def check_nested_raisesgroups_matches() -> None:
         assert_type(exc, ExceptionGroup[ExceptionGroup[ValueError]])
 
 
-def check_multiple_exceptions_1() -> None:
+def test_multiple_exceptions_1() -> None:
     a = RaisesGroup(ValueError, ValueError)
     b = RaisesGroup(RaisesExc(ValueError), RaisesExc(ValueError))
     c = RaisesGroup(ValueError, RaisesExc(ValueError))
@@ -186,7 +186,7 @@ def check_multiple_exceptions_1() -> None:
     assert d
 
 
-def check_multiple_exceptions_2() -> None:
+def test_multiple_exceptions_2() -> None:
     # This previously failed due to lack of covariance in the TypeVar
     a = RaisesGroup(RaisesExc(ValueError), RaisesExc(TypeError))
     b = RaisesGroup(RaisesExc(ValueError), TypeError)
@@ -227,12 +227,12 @@ def check_raisesgroup_overloads() -> None:
     RaisesGroup(RaisesGroup(ValueError))
 
 
-def check_triple_nested_raisesgroup() -> None:
+def test_triple_nested_raisesgroup() -> None:
     with RaisesGroup(RaisesGroup(RaisesGroup(ValueError))) as e:
         assert_type(e.value, ExceptionGroup[ExceptionGroup[ExceptionGroup[ValueError]]])
 
 
-def check_check_typing() -> None:
+def test_check_typing() -> None:
     # `BaseExceptiongroup` should perhaps be `ExceptionGroup`, but close enough
     assert_type(
         RaisesGroup(ValueError).check,

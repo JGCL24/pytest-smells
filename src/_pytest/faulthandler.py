@@ -38,7 +38,7 @@ def pytest_configure(config: Config) -> None:
     # so here we stash the stderr fileno to be used at teardown
     # sys.stderr and sys.__stderr__ may be closed or patched during the session
     # so we can't rely on their values being good at that point (#11572).
-    stderr_fileno = get_stderr_fileno()
+    stderr_fileno = test_get_stderr_fileno()
     if faulthandler.is_enabled():
         config.stash[fault_handler_original_stderr_fd_key] = stderr_fileno
     config.stash[fault_handler_stderr_fd_key] = os.dup(stderr_fileno)
@@ -59,7 +59,7 @@ def pytest_unconfigure(config: Config) -> None:
         del config.stash[fault_handler_original_stderr_fd_key]
 
 
-def get_stderr_fileno() -> int:
+def test_get_stderr_fileno() -> int:
     try:
         fileno = sys.stderr.fileno()
         # The Twisted Logger will return an invalid file descriptor since it is not backed

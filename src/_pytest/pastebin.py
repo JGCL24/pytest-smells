@@ -102,7 +102,7 @@ def create_new_paste(contents: str | bytes) -> str:
         return "bad response: invalid format ('" + response + "')"
 
 
-def pytest_terminal_summary(terminalreporter: TerminalReporter) -> None:
+def test_pytest_terminal_summary(terminalreporter: TerminalReporter) -> None:
     if terminalreporter.config.option.pastebin != "failed":
         return
     if "failed" in terminalreporter.stats:
