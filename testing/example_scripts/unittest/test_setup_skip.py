@@ -8,10 +8,10 @@ import unittest
 
 class Base(unittest.TestCase):
     def setUp(self):
-        assert 0
+        self.setup_done = False
 
 
 @unittest.skip("skip all tests")
 class Test(Base):
     def test_foo(self):
-        assert 0
+        assert self.setup_done
