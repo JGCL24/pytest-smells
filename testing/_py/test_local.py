@@ -1402,14 +1402,11 @@ class TestPOSIXLocalPath:
 
         path = tmpdir.ensure("samplefile")
         # Do not use _pytest.timing here, as we do not want time mocking to affect this test.
-        now = time.time()
+        now = int(time.time()) - 100
+        os.utime(str(path), (now, now))
         atime1 = path.atime()
-        # we could wait here but timer resolution is very
-        # system dependent
         path.read_binary()
-        time.sleep(ATIME_RESOLUTION)
         atime2 = path.atime()
-        time.sleep(ATIME_RESOLUTION)
         duration = time.time() - now
         assert (atime2 - atime1) <= duration
 
@@ -1477,8 +1474,8 @@ class TestPOSIXLocalPath:
     def test_copy_stat_file(self, tmpdir):
         src = tmpdir.ensure("src")
         dst = tmpdir.join("dst")
-        # a small delay before the copy
-        time.sleep(ATIME_RESOLUTION)
+        timestamp = int(time.time()) - 100
+        os.utime(str(src), (timestamp, timestamp))
         src.copy(dst, stat=True)
         oldstat = src.stat()
         newstat = dst.stat()
@@ -1489,11 +1486,12 @@ class TestPOSIXLocalPath:
     def test_copy_stat_dir(self, tmpdir):
         test_files = ["a", "b", "c"]
         src = tmpdir.join("src")
+        timestamp = int(time.time()) - 100
         for f in test_files:
-            src.join(f).write_text(f, ensure=True, encoding="utf-8")
+            filepath = src.join(f)
+            filepath.write_text(f, ensure=True, encoding="utf-8")
+            os.utime(str(filepath), (timestamp, timestamp))
         dst = tmpdir.join("dst")
-        # a small delay before the copy
-        time.sleep(ATIME_RESOLUTION)
         src.copy(dst, stat=True)
         for f in test_files:
             oldstat = src.join(f).stat()

@@ -622,7 +622,7 @@ def test_run_stdin(pytester: Pytester) -> None:
         pytester.run(
             sys.executable,
             "-c",
-            "import sys, time; time.sleep(1); print(sys.stdin.read())",
+            "import sys, threading; threading.Event().wait(); print(sys.stdin.read())",
             stdin=subprocess.PIPE,
             timeout=0.1,
         )
@@ -631,7 +631,7 @@ def test_run_stdin(pytester: Pytester) -> None:
         result = pytester.run(
             sys.executable,
             "-c",
-            "import sys, time; time.sleep(1); print(sys.stdin.read())",
+            "import sys, threading; threading.Event().wait(); print(sys.stdin.read())",
             stdin=b"input\n2ndline",
             timeout=0.1,
         )
