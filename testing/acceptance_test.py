@@ -1689,12 +1689,10 @@ def test_doctest_and_normal_imports_with_importlib(pytester: Pytester) -> None:
     result.stdout.fnmatch_lines("*1 passed*")
 
 
-@pytest.mark.skip(reason="Test is not isolated")
-def test_issue_9765(pytester: Pytester) -> None:
-    """Reproducer for issue #9765 on Windows
-
-    https://github.com/pytest-dev/pytest/issues/9765
-    """
+@pytest.fixture
+def my_package_project(pytester: Pytester) -> None:
+    """Create the project of issue #9765: an installable package with a plugin
+    loaded through ``addopts``."""
     pytester.makepyprojecttoml(
         """
         [tool.pytest.ini_options]
@@ -1732,6 +1730,14 @@ def test_issue_9765(pytester: Pytester) -> None:
         }
     )
 
+
+@pytest.mark.skip(reason="Test is not isolated")
+@pytest.mark.usefixtures("my_package_project")
+def test_issue_9765() -> None:
+    """Reproducer for issue #9765 on Windows
+
+    https://github.com/pytest-dev/pytest/issues/9765
+    """
     subprocess.run(
         [sys.executable, "-Im", "pip", "install", "-e", "."],
         check=True,
