@@ -268,42 +268,8 @@ class TestImportHookInstallation:
         result = pytester.runpytest_subprocess("--assert=rewrite")
         assert result.ret == 0
 
-    @pytest.mark.parametrize("mode", ["plain", "rewrite"])
-    @pytest.mark.parametrize("disable_plugin_autoload", ["env_var", "cli", ""])
-    @pytest.mark.parametrize("explicit_specify", ["env_var", "cli", ""])
-    def test_installed_plugin_rewrite(
-        self,
-        pytester: Pytester,
-        mode: str,
-        monkeypatch: pytest.MonkeyPatch,
-        disable_plugin_autoload: str,
-        explicit_specify: str,
-    ) -> None:
-        args = ["mainwrapper.py", "-s", f"--assert={mode}"]
-        if disable_plugin_autoload == "env_var":
-            monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
-        elif disable_plugin_autoload == "cli":
-            monkeypatch.delenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", raising=False)
-            args.append("--disable-plugin-autoload")
-        else:
-            assert disable_plugin_autoload == ""
-            monkeypatch.delenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", raising=False)
-
-        name = "spamplugin"
-
-        if explicit_specify == "env_var":
-            monkeypatch.setenv("PYTEST_PLUGINS", name)
-        elif explicit_specify == "cli":
-            args.append("-p")
-            args.append(name)
-        else:
-            assert explicit_specify == ""
-
-        # Make sure the hook is installed early enough so that plugins
-        # installed via distribution package are rewritten.
-        pytester.mkdir("hampkg")
-        contents = {
-            "hampkg/__init__.py": """\
+    _INSTALLED_PLUGIN_FILES = {
+        "hampkg/__init__.py": """\
                 import pytest
 
                 @pytest.fixture
@@ -312,7 +278,7 @@ class TestImportHookInstallation:
                         assert values.pop(0) == value
                     return check
             """,
-            "spamplugin.py": """\
+        "spamplugin.py": """\
             import pytest
             from hampkg import check_first2
 
@@ -322,7 +288,7 @@ class TestImportHookInstallation:
                     assert values.pop(0) == value
                 return check
             """,
-            "mainwrapper.py": """\
+        "mainwrapper.py": """\
             import importlib.metadata
             import pytest
 
@@ -347,22 +313,73 @@ class TestImportHookInstallation:
             importlib.metadata.distributions = distributions
             pytest.main()
             """,
-            "test_foo.py": """\
+        "test_foo.py": """\
             def test(check_first):
                 check_first([10, 30], 30)
 
             def test2(check_first2):
                 check_first2([10, 30], 30)
             """,
-        }
-        pytester.makepyfile(**contents)
-        result = pytester.run(sys.executable, *args)
-        if mode == "plain":
-            expected = "E       AssertionError"
-        elif mode == "rewrite":
-            expected = "*assert 10 == 30*"
+    }
+
+    _EXPECTED_FAILURE_LINE = {
+        "plain": "E       AssertionError",
+        "rewrite": "*assert 10 == 30*",
+    }
+
+    @pytest.fixture
+    def installed_plugin_project(self, pytester: Pytester) -> None:
+        # Make sure the hook is installed early enough so that plugins
+        # installed via distribution package are rewritten.
+        pytester.mkdir("hampkg")
+        pytester.makepyfile(**self._INSTALLED_PLUGIN_FILES)
+
+    @staticmethod
+    def _plugin_loading_args(
+        monkeypatch: pytest.MonkeyPatch,
+        disable_plugin_autoload: str,
+        explicit_specify: str,
+    ) -> list[str]:
+        """Set the environment for the scenario and return its extra CLI args."""
+        args = []
+        if disable_plugin_autoload == "env_var":
+            monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+        elif disable_plugin_autoload == "cli":
+            monkeypatch.delenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", raising=False)
+            args.append("--disable-plugin-autoload")
         else:
-            assert 0
+            assert disable_plugin_autoload == ""
+            monkeypatch.delenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", raising=False)
+
+        name = "spamplugin"
+
+        if explicit_specify == "env_var":
+            monkeypatch.setenv("PYTEST_PLUGINS", name)
+        elif explicit_specify == "cli":
+            args.append("-p")
+            args.append(name)
+        else:
+            assert explicit_specify == ""
+        return args
+
+    @pytest.mark.parametrize("mode", ["plain", "rewrite"])
+    @pytest.mark.parametrize("disable_plugin_autoload", ["env_var", "cli", ""])
+    @pytest.mark.parametrize("explicit_specify", ["env_var", "cli", ""])
+    @pytest.mark.usefixtures("installed_plugin_project")
+    def test_installed_plugin_rewrite(
+        self,
+        pytester: Pytester,
+        mode: str,
+        monkeypatch: pytest.MonkeyPatch,
+        disable_plugin_autoload: str,
+        explicit_specify: str,
+    ) -> None:
+        args = ["mainwrapper.py", "-s", f"--assert={mode}"]
+        args += self._plugin_loading_args(
+            monkeypatch, disable_plugin_autoload, explicit_specify
+        )
+        result = pytester.run(sys.executable, *args)
+        expected = self._EXPECTED_FAILURE_LINE[mode]
 
         if not disable_plugin_autoload or explicit_specify:
             result.assert_outcomes(failed=2)
