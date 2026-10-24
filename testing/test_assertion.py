@@ -1992,6 +1992,25 @@ class TestTruncateExplanation:
         result.stdout.fnmatch_lines(["*Full output truncated, use '-vv' to show*"])
 
 
+class _Tracked:
+    """Element whose ``repr`` calls are counted in ``_Tracked.reprs``."""
+
+    reprs = 0
+
+    def __init__(self, v: int) -> None:
+        self.v = v
+
+    def __repr__(self) -> str:
+        _Tracked.reprs += 1
+        return f"T({self.v})"
+
+    def __eq__(self, o: object) -> bool:
+        return isinstance(o, _Tracked) and self.v == o.v
+
+    def __hash__(self) -> int:
+        return hash(self.v)
+
+
 class TestMaterializeWithTruncation:
     """Tests for ``truncate.materialize_with_truncation``."""
 
@@ -2102,6 +2121,36 @@ class TestMaterializeWithTruncation:
         )
         return truncate.materialize_with_truncation(src, config)
 
+    @staticmethod
+    def _make_near_identical_pair(shape: str, n: int) -> tuple[object, object]:
+        # Two near-identical containers differing in one spot, so the
+        # explanation is a real (truncated) diff.
+        if shape in ("list", "tuple"):
+            seq_left = [_Tracked(i) for i in range(n)]
+            seq_right = [_Tracked(i) for i in range(n)]
+            seq_right[0] = _Tracked(-1)
+            if shape == "tuple":
+                return tuple(seq_left), tuple(seq_right)
+            return seq_left, seq_right
+        if shape == "dict":
+            map_left = {i: _Tracked(i) for i in range(n)}
+            map_right = {i: _Tracked(i) for i in range(n)}
+            map_right[0] = _Tracked(-1)
+            return map_left, map_right
+        # set
+        set_left = {_Tracked(i) for i in range(n)}
+        set_right = {_Tracked(i) for i in range(n)}
+        set_right.discard(_Tracked(0))
+        set_right.add(_Tracked(-1))
+        return set_left, set_right
+
+    def _formatting_work(self, shape: str, n: int) -> tuple[int, int]:
+        left, right = self._make_near_identical_pair(shape, n)
+        _Tracked.reprs = 0  # count only the formatting, not the construction
+        out = self._explain_capped(left, right)
+        assert any("truncated" in line for line in out)
+        return len(out), _Tracked.reprs
+
     @pytest.mark.parametrize("shape", ["list", "tuple", "dict", "set"])
     def test_formatting_work_is_bounded_for_a_10_line_display(self, shape: str) -> None:
         """A huge comparison whose display is truncated to ~10 lines must
@@ -2110,54 +2159,8 @@ class TestMaterializeWithTruncation:
         Element ``repr`` calls are counted as a deterministic proxy for
         the formatting work (wall-clock would flake in CI).
         """
-
-        class Tracked:
-            reprs = 0
-
-            def __init__(self, v: int) -> None:
-                self.v = v
-
-            def __repr__(self) -> str:
-                Tracked.reprs += 1
-                return f"T({self.v})"
-
-            def __eq__(self, o: object) -> bool:
-                return isinstance(o, Tracked) and self.v == o.v
-
-            def __hash__(self) -> int:
-                return hash(self.v)
-
-        def make(n: int) -> tuple[object, object]:
-            # Two near-identical containers differing in one spot, so the
-            # explanation is a real (truncated) diff.
-            if shape in ("list", "tuple"):
-                seq_left = [Tracked(i) for i in range(n)]
-                seq_right = [Tracked(i) for i in range(n)]
-                seq_right[0] = Tracked(-1)
-                if shape == "tuple":
-                    return tuple(seq_left), tuple(seq_right)
-                return seq_left, seq_right
-            if shape == "dict":
-                map_left = {i: Tracked(i) for i in range(n)}
-                map_right = {i: Tracked(i) for i in range(n)}
-                map_right[0] = Tracked(-1)
-                return map_left, map_right
-            # set
-            set_left = {Tracked(i) for i in range(n)}
-            set_right = {Tracked(i) for i in range(n)}
-            set_right.discard(Tracked(0))
-            set_right.add(Tracked(-1))
-            return set_left, set_right
-
-        def work(n: int) -> tuple[int, int]:
-            left, right = make(n)
-            Tracked.reprs = 0  # count only the formatting, not the construction
-            out = self._explain_capped(left, right)
-            assert any("truncated" in line for line in out)
-            return len(out), Tracked.reprs
-
-        lines_small, reprs_small = work(1_000)
-        lines_big, reprs_big = work(100_000)
+        lines_small, reprs_small = self._formatting_work(shape, 1_000)
+        lines_big, reprs_big = self._formatting_work(shape, 100_000)
         assert lines_small == lines_big
         assert reprs_small == reprs_big
         assert reprs_big < 200  # nowhere near the 100_000-element input
