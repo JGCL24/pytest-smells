@@ -915,6 +915,7 @@ class TestAssert_reprcompare:
             "  }",
         ]
 
+    def test_dict_wrap_long_values(self) -> None:
         long_a = "a" * 80
         sub = {"long_a": long_a, "sub1": {"long_a": "substring that gets wrapped " * 3}}
         d1 = {"env": {"sub": sub}}
