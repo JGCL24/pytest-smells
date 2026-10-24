@@ -725,36 +725,45 @@ class TestInvocationVariants:
         assert result.ret != 0
         result.stderr.fnmatch_lines(["*not*found*test_missing*"])
 
-    @pytest.mark.skipif(
+    requires_pkg_resources = pytest.mark.skipif(
         int(setuptools.__version__.split(".")[0]) >= 80,
         reason="modern setuptools removing pkg_resources",
     )
-    def test_cmdline_python_legacy_namespace_package(
-        self, pytester: Pytester, monkeypatch
-    ) -> None:
-        """Test --pyargs option with legacy namespace packages (#1567).
 
-        Ref: https://packaging.python.org/guides/packaging-namespace-packages/
+    @staticmethod
+    def _make_legacy_namespace_package(pytester: Pytester, dirname: str) -> Path:
+        """Create ``<dirname>/ns_pkg/<dirname>/test_<dirname>.py``.
+
+        ``ns_pkg`` is declared as a legacy (``pkg_resources``) namespace package.
         """
+        d = pytester.mkdir(dirname)
+        ns = d.joinpath("ns_pkg")
+        ns.mkdir()
+        ns.joinpath("__init__.py").write_text(
+            "__import__('pkg_resources').declare_namespace(__name__)",
+            encoding="utf-8",
+        )
+        lib = ns.joinpath(dirname)
+        lib.mkdir()
+        lib.joinpath("__init__.py").touch()
+        lib.joinpath(f"test_{dirname}.py").write_text(
+            f"def test_{dirname}(): pass\ndef test_other():pass",
+            encoding="utf-8",
+        )
+        return d
+
+    @pytest.fixture
+    def legacy_namespace_packages(
+        self, pytester: Pytester, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Create the ``hello`` and ``world`` legacy namespace packages that share
+        ``ns_pkg`` (#1567) and make both of them importable."""
         monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
 
-        search_path = []
-        for dirname in "hello", "world":
-            d = pytester.mkdir(dirname)
-            search_path.append(d)
-            ns = d.joinpath("ns_pkg")
-            ns.mkdir()
-            ns.joinpath("__init__.py").write_text(
-                "__import__('pkg_resources').declare_namespace(__name__)",
-                encoding="utf-8",
-            )
-            lib = ns.joinpath(dirname)
-            lib.mkdir()
-            lib.joinpath("__init__.py").touch()
-            lib.joinpath(f"test_{dirname}.py").write_text(
-                f"def test_{dirname}(): pass\ndef test_other():pass",
-                encoding="utf-8",
-            )
+        search_path = [
+            self._make_legacy_namespace_package(pytester, dirname)
+            for dirname in ("hello", "world")
+        ]
 
         # The structure of the test directory is now:
         # .
@@ -776,6 +785,15 @@ class TestInvocationVariants:
         for p in search_path:
             monkeypatch.syspath_prepend(p)
 
+    @requires_pkg_resources
+    @pytest.mark.usefixtures("legacy_namespace_packages")
+    def test_cmdline_python_legacy_namespace_package(
+        self, pytester: Pytester, monkeypatch
+    ) -> None:
+        """Test --pyargs option with legacy namespace packages (#1567).
+
+        Ref: https://packaging.python.org/guides/packaging-namespace-packages/
+        """
         # mixed module and filenames:
         monkeypatch.chdir("world")
 
@@ -801,6 +819,12 @@ class TestInvocationVariants:
             ]
         )
 
+    @requires_pkg_resources
+    @pytest.mark.usefixtures("legacy_namespace_packages")
+    def test_cmdline_python_legacy_namespace_package_single_test(
+        self, pytester: Pytester
+    ) -> None:
+        """Test --pyargs with a single test of a legacy namespace package (#1567)."""
         # specify tests within a module
         pytester.chdir()
         result = pytester.runpytest(
