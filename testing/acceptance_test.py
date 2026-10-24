@@ -1304,10 +1304,9 @@ def test_deferred_hook_checking(pytester: Pytester) -> None:
     result.stdout.fnmatch_lines(["* 1 passed *"])
 
 
-def test_fixture_values_leak(pytester: Pytester) -> None:
-    """Ensure that fixture objects are properly destroyed by the garbage collector at the end of their expected
-    life-times (#2981).
-    """
+@pytest.fixture
+def fixture_leak_module(pytester: Pytester) -> None:
+    """Create a module whose fixtures keep weak references to their own values."""
     pytester.makepyfile(
         """
         import dataclasses
@@ -1345,6 +1344,13 @@ def test_fixture_values_leak(pytester: Pytester) -> None:
             assert fix_of_test1_ref() is None
     """
     )
+
+
+@pytest.mark.usefixtures("fixture_leak_module")
+def test_fixture_values_leak(pytester: Pytester) -> None:
+    """Ensure that fixture objects are properly destroyed by the garbage collector at the end of their expected
+    life-times (#2981).
+    """
     # Running on subprocess does not activate the HookRecorder
     # which holds itself a reference to objects in case of the
     # pytest_assert_reprcompare hook
