@@ -845,17 +845,10 @@ class TestInvocationVariants:
         result = pytester.runpytest(str(p) + "::test", "--doctest-modules")
         result.stdout.fnmatch_lines(["*1 passed*"])
 
-    def test_cmdline_python_package_symlink(
-        self, pytester: Pytester, monkeypatch
-    ) -> None:
-        """
-        --pyargs with packages with path containing symlink can have conftest.py in
-        their package (#2985)
-        """
-        monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
-
-        dirname = "lib"
-        d = pytester.mkdir(dirname)
+    @staticmethod
+    def _make_lib_package(pytester: Pytester) -> Path:
+        """Create ``lib/foo/bar`` with a test module and a ``conftest.py``."""
+        d = pytester.mkdir("lib")
         foo = d.joinpath("foo")
         foo.mkdir()
         foo.joinpath("__init__.py").touch()
@@ -868,7 +861,16 @@ class TestInvocationVariants:
         lib.joinpath("conftest.py").write_text(
             "import pytest\n@pytest.fixture\ndef a_fixture():pass", encoding="utf-8"
         )
+        return d
 
+    @pytest.fixture
+    def symlinked_lib_on_path(
+        self, pytester: Pytester, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Create ``symlink_root/lib -> lib`` and make both paths importable (#2985)."""
+        monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+
+        d = self._make_lib_package(pytester)
         d_local = pytester.mkdir("symlink_root")
         symlink_location = d_local / "lib"
         symlink_or_skip(d, symlink_location, target_is_directory=True)
@@ -891,6 +893,12 @@ class TestInvocationVariants:
         for p in search_path:
             monkeypatch.syspath_prepend(p)
 
+    @pytest.mark.usefixtures("symlinked_lib_on_path")
+    def test_cmdline_python_package_symlink(self, pytester: Pytester) -> None:
+        """
+        --pyargs with packages with path containing symlink can have conftest.py in
+        their package (#2985)
+        """
         # module picked up in symlink-ed directory:
         # It picks up symlink_root/lib/foo/bar (symlink) via sys.path.
         result = pytester.runpytest("--pyargs", "-v", "foo.bar")
