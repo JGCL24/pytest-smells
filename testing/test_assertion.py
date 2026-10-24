@@ -33,6 +33,69 @@ from _pytest.pytester import Pytester
 import pytest
 
 
+class _MockTerminalWriter:
+    def _highlight(self, source, lexer="python"):
+        return source
+
+
+class _MockPluginManager:
+    def __init__(self, has_terminalreporter: bool) -> None:
+        self._has_terminalreporter = has_terminalreporter
+
+    def has_plugin(self, name: str) -> bool:
+        return self._has_terminalreporter
+
+
+class _MockConfig:
+    def __init__(
+        self,
+        verbose: int,
+        assertion_override: int | None,
+        assertion_text_diff_style: _AssertionTextDiffStyle,
+        truncation_limit_lines: str,
+        truncation_limit_chars: str,
+        has_terminalreporter: bool,
+    ) -> None:
+        self._verbose = verbose
+        self._assertion_override = assertion_override
+        self._assertion_text_diff_style = assertion_text_diff_style
+        self._truncation_limit_lines = truncation_limit_lines
+        self._truncation_limit_chars = truncation_limit_chars
+        self._has_terminalreporter = has_terminalreporter
+        self.pluginmanager = _MockPluginManager(has_terminalreporter)
+
+    def get_terminal_writer(self):
+        # When the terminalreporter plugin is absent the dispatcher must
+        # fall back to the plaintext highlighter without reaching for a
+        # terminal writer (#14377); make that misuse fail loudly.
+        assert self._has_terminalreporter, (
+            "get_terminal_writer() must not be called without terminalreporter"
+        )
+        return _MockTerminalWriter()
+
+    def get_verbosity(self, verbosity_type: str | None = None) -> int:
+        if verbosity_type is None:
+            return self._verbose
+        if verbosity_type == _Config.VERBOSITY_ASSERTIONS:
+            if self._assertion_override is not None:
+                return self._assertion_override
+            return self._verbose
+
+        raise KeyError(f"Not mocked out: {verbosity_type}")
+
+    def getini(self, name: str) -> str:
+        if name == "assertion_text_diff_style":
+            return self._assertion_text_diff_style
+        # Truncation defaults to disabled (``"0"``) so ``callop``-style
+        # tests can compare against the full explanation; the dispatcher
+        # tests pass explicit limits to exercise the budget wiring.
+        if name == "truncation_limit_lines":
+            return self._truncation_limit_lines
+        if name == "truncation_limit_chars":
+            return self._truncation_limit_chars
+        raise KeyError(f"Not mocked out: {name}")
+
+
 def mock_config(
     verbose: int = 0,
     assertion_override: int | None = None,
@@ -41,49 +104,14 @@ def mock_config(
     truncation_limit_chars: str = "0",
     has_terminalreporter: bool = True,
 ):
-    class TerminalWriter:
-        def _highlight(self, source, lexer="python"):
-            return source
-
-    class PluginManager:
-        def has_plugin(self, name: str) -> bool:
-            return has_terminalreporter
-
-    class Config:
-        pluginmanager = PluginManager()
-
-        def get_terminal_writer(self):
-            # When the terminalreporter plugin is absent the dispatcher must
-            # fall back to the plaintext highlighter without reaching for a
-            # terminal writer (#14377); make that misuse fail loudly.
-            assert has_terminalreporter, (
-                "get_terminal_writer() must not be called without terminalreporter"
-            )
-            return TerminalWriter()
-
-        def get_verbosity(self, verbosity_type: str | None = None) -> int:
-            if verbosity_type is None:
-                return verbose
-            if verbosity_type == _Config.VERBOSITY_ASSERTIONS:
-                if assertion_override is not None:
-                    return assertion_override
-                return verbose
-
-            raise KeyError(f"Not mocked out: {verbosity_type}")
-
-        def getini(self, name: str) -> str:
-            if name == "assertion_text_diff_style":
-                return assertion_text_diff_style
-            # Truncation defaults to disabled (``"0"``) so ``callop``-style
-            # tests can compare against the full explanation; the dispatcher
-            # tests pass explicit limits to exercise the budget wiring.
-            if name == "truncation_limit_lines":
-                return truncation_limit_lines
-            if name == "truncation_limit_chars":
-                return truncation_limit_chars
-            raise KeyError(f"Not mocked out: {name}")
-
-    return Config()
+    return _MockConfig(
+        verbose,
+        assertion_override,
+        assertion_text_diff_style,
+        truncation_limit_lines,
+        truncation_limit_chars,
+        has_terminalreporter,
+    )
 
 
 class TestMockConfig:
