@@ -1155,6 +1155,8 @@ class TestAssert_reprcompare:
             "-     5,",
             "  )",
         ]
+
+    def test_sequence_left_has_more_items(self) -> None:
         lines = callequal((1, 2, 3), (4,), verbose=2)
         assert lines == [
             "(1, 2, 3) == (4,)",
@@ -1172,6 +1174,8 @@ class TestAssert_reprcompare:
             "+     3,",
             "  )",
         ]
+
+    def test_sequence_different_item_in_the_middle(self) -> None:
         lines = callequal((1, 2, 3), (1, 20, 3), verbose=2)
         assert lines == [
             "(1, 2, 3) == (1, 20, 3)",
