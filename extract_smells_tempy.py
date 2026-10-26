@@ -14,7 +14,7 @@ Uso (sempre a partir da pasta raiz do projeto):
 from __future__ import annotations
 
 
-TEMPY_DIR = "../TEMPY"
+TEMPY_DIR = "./TEMPY"
 # ============================================================
 
 import argparse
